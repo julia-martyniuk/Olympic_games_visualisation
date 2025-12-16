@@ -193,3 +193,54 @@ img_n_events_growth_pl <- n_events_growth_pl +
                 top = 0.98, 
                 align_to = "panel")
 img_n_events_growth_pl
+
+################################################################################
+################################################################################
+# Olympic Disciplines by Gender 
+
+global_gender_trends <- olympics %>%
+  group_by(Year, Season) %>%
+  summarise(
+    # Count unique disciplines available globally for each gender
+    Women = n_distinct(Discipline[Gender == "Women"]),
+    Men   = n_distinct(Discipline[Gender == "Men"])
+  ) %>%
+  ungroup()
+
+
+global_trends_long <- global_gender_trends %>%
+  pivot_longer(
+    cols = c("Women", "Men"),
+    names_to = "Gender",      
+    values_to = "Count"       
+  )
+
+
+disc_by_gndr <-  ggplot(global_trends_long, aes(x = Year, y = Count, color = Gender)) +
+                    geom_line(size = 1) +
+                    geom_point(size = 2) +
+                    facet_wrap(~ Season) + 
+                    scale_color_manual(values = c("Men" = "#1f77b4", "Women" = "#e377c2")) +
+                    theme_minimal() +
+                    theme(
+                      plot.title = element_text(color= "black",face = "bold", size = 20),
+                      axis.title = element_text(color = "grey31"),
+                      legend.background = element_rect(color='black', fill=NA),
+                      legend.box = "vertical",
+                    ) +
+                    labs(
+                      title = "Growth of Olympic disciplines by gender",
+                      subtitle = "Comparison of unique disciplines available for Men vs. Women over time",
+                      x = "Year",
+                      y = "Number of Disciplines",
+                      color = "Gender"
+                    )
+
+img_disc_by_gndr <- disc_by_gndr +                  
+  inset_element(p = logo,
+                left = 0.02, # to align to right 0.80
+                bottom = 0.80, # 0.85
+                right = 0.20, # 1
+                top = 0.98, # 1
+                align_to = "plot")
+img_disc_by_gndr
