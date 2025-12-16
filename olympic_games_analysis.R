@@ -11,6 +11,8 @@ library(ggrepel)
 # install.packages('gifski')
 # install.packages('gganimate')
 library(gganimate)
+library(jpeg)
+library(patchwork)
 ################################################################################
 ################################################################################
 ######## Data preprocessing ########
@@ -131,3 +133,63 @@ olympics <- olympics %>%
     )
   )
 
+# Paste Olympic games logo on the plots 
+getwd()
+img_path <- 'olympic_emblem_2.jpg'
+################################################################################
+################################################################################
+# Olympic games by number of events and number of countries participates per years 
+growth_n_events <- olympics %>%
+  # Group by both Year and Season now
+  group_by(Year, Season) %>%
+  summarise(
+    Countries = n_distinct(Country_Link),
+    Events = n_distinct(Event)
+  ) %>%
+  ungroup() %>%
+  # Reshape to Long format
+  pivot_longer(cols = c("Countries", "Events"), 
+               names_to = "Metric", 
+               values_to = "Count")
+
+
+n_events_growth_pl <-  
+  ggplot(growth_n_events, aes(x = Year, y = Count, color = Season, linetype = Metric)) +
+        geom_line(size = 1.2) +
+        geom_point(aes(shape = Metric), size = 3) + 
+        scale_color_manual(values = c("Summer" = "#d7191c", "Winter" = "#2c7bb6")) +
+        scale_linetype_manual(values = c("Events" = "solid", "Countries" = "dashed")) +
+       # Scales
+        scale_x_continuous(breaks = seq(1896, 2016, by = 8)) +    
+       # Labels
+        labs(
+        title = "Evolution of the Olympic games",
+        subtitle = "Growth in participating Nations vs. Events (Summer & Winter)",
+        x = "Year",
+        y = "Count",
+        caption = "Source: Olympics dataset",
+        color = "Season",
+        linetype = "Metric",
+        shape = "Metric"
+         ) +
+        # Theme
+        theme_minimal() +
+        theme(
+        legend.position = "bottom",
+        legend.background = element_rect(color='black', fill=NA),
+        legend.box = "horizontal", 
+        plot.title = element_text(color= "black",face = "bold", size = 20),
+        axis.title = element_text(color = "grey31"),
+        panel.grid.minor = element_blank() 
+        )
+
+logo <- readJPEG(img_path, native = TRUE)
+
+img_n_events_growth_pl <- n_events_growth_pl +                  
+  inset_element(p = logo,
+                left = 0.02,
+                bottom = 0.80,
+                right = 0.20,
+                top = 0.98, 
+                align_to = "panel")
+img_n_events_growth_pl
