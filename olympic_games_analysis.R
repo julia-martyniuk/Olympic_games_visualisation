@@ -1,40 +1,45 @@
 print("We are starting the project!")
-
+################################################################################
+################################################################################
 # Libraries
 library(dplyr)
 library(stringr)
 library(tidyverse)
-
+library(ggplot2)
+library(ggthemes)
+library(ggrepel) 
+# install.packages('gifski')
+# install.packages('gganimate')
+library(gganimate)
+################################################################################
+################################################################################
+######## Data preprocessing ########
 data_w <- read.csv('data/winter.csv')
 data_s <- read.csv('data/summer.csv')
 data_general <- read.csv('data/dictionary.csv')
 
+# Add season and create one common dataset 
+data_w <- data_w %>% mutate(Season = "Winter")
+data_s <- data_s %>% mutate(Season = "Summer")
+olympics <- bind_rows(data_w, data_s)
+
 # Check structure of the datasets and data types
-str(data_w)
-str(data_s)
+str(olympics)
 str(data_general)
 
 # check unique values 
-# Summer Olympic games
-data_s %>%
+olympics %>%
   summarise(across(everything(), n_distinct))
-unique(data_s[["Year"]])
-unique(data_s[["City"]])
-unique(data_s[["Sport"]])
-unique(data_s[["Discipline"]])  
-unique(data_s[["Medal"]])
+unique(olympics[["Year"]])
+unique(olympics[["City"]])
+unique(olympics[["Sport"]])
+unique(olympics[["Discipline"]])  
+unique(olympics[["Medal"]])
+unique(olympics[["Country"]])
 
-# Winter Olympic games
-data_w %>%
-  summarise(across(everything(), n_distinct))
-unique(data_w[["Year"]])
-unique(data_w[["City"]])
-unique(data_w[["Sport"]])
-unique(data_w[["Discipline"]])  
-unique(data_w[["Event"]])  
   
 # Edit the name of the participants 
-data_w <- data_w %>%
+olympics <- olympics %>%
   separate(Athlete, into = c("Last_Name", "First_Name"), sep = ",", extra = "merge", fill = "right") %>%
   mutate(Last_Name = str_to_title(Last_Name),
          First_Name = str_to_title(First_Name)) %>%
@@ -44,111 +49,85 @@ data_w <- data_w %>%
         sep = ", ",                                  
         remove = TRUE)                              
 
-data_s <- data_s %>%
-  separate(Athlete, into = c("Last_Name", "First_Name"), sep = ",", extra = "merge", fill = "right") %>%
-  mutate(Last_Name = str_to_title(Last_Name),
-         First_Name = str_to_title(First_Name)) %>%
-  mutate(First_Name = str_trim(First_Name))  %>%
-  unite(col = "Athlete_name",                          
-        c("Last_Name", "First_Name"),                
-        sep = ", ",                                  
-        remove = TRUE)
-
-# Create new summary table 
-summary_winter <- data_w %>%
-  group_by(Country, Year) %>%
-  summarise(
-    n_women_winners = n_distinct(Athlete_name[Gender == "Women"]), 
-    n_men_winners   = n_distinct(Athlete_name[Gender == "Men"]),
+# Due to the historical and political events, some countries were reunited or even
+# no more exist. So, for our project, we want to adjust this issue 
+# just a mote:  ZZX - Mixed teams, SCG - Serbia and Montenegro (from 2006 SRB and MNE)
+# YUG - Yugoslavia, IOP - Independent Olympic Participants (1992 for athletes from Yugoslavia and the Republic of Macedonia)
+olympics <- olympics %>%
+  mutate(Country_Link = case_when(
+    # Russia legacy 
+    # Combines: USSR, Russian Empire, Unified Team
+    Country %in% c("URS","RUS", "EUN", "RU1") ~ "RUS_L",
     
-    # Count Medals 
-    n_gold   = sum(Medal == "Gold", na.rm = TRUE),
-    n_silver = sum(Medal == "Silver", na.rm = TRUE),
-    n_bronze = sum(Medal == "Bronze", na.rm = TRUE),
+    # Germany legacy
+    # Combines: West, East, Unified Team, Modern Germany
+    Country %in% c("GER", "GDR", "FRG", "EUA") ~ "GER_L",
     
-    # Count Unique Disciplines by Gender
-    n_disc_women = n_distinct(Discipline[Gender == "Women"]),
-    n_disc_men   = n_distinct(Discipline[Gender == "Men"]),
-    
-    # Total Medals 
-    total_medals = n() 
-  ) %>%
-  ungroup() 
+    # Czech legacy
+    # Combines: Bohemia, Czechoslovakia, Czech Republic
+    Country %in% c("TCH", "CZE", "BOH") ~ "CZE_L",
+    TRUE ~ Country
+  ))
 
-head(summary_winter)
-
-summary_summer <- data_s %>%
-  group_by(Country, Year) %>%
-  summarise(
-    n_women_winners = n_distinct(Athlete_name[Gender == "Women"]), 
-    n_men_winners   = n_distinct(Athlete_name[Gender == "Men"]),
-    
-    # Count Medals 
-    n_gold   = sum(Medal == "Gold", na.rm = TRUE),
-    n_silver = sum(Medal == "Silver", na.rm = TRUE),
-    n_bronze = sum(Medal == "Bronze", na.rm = TRUE),
-    
-    # Count Unique Disciplines by Gender
-    n_disc_women = n_distinct(Discipline[Gender == "Women"]),
-    n_disc_men   = n_distinct(Discipline[Gender == "Men"]),
-    
-    # Total Medals 
-    total_medals = n() 
-  ) %>%
-  ungroup() 
-
-head
-
-
-
-
-# test plot 
-library(tidyverse)
-
-global_gender_trends <- data_w %>%
-  group_by(Year) %>%
-  summarise(
-    # Count unique disciplines available globally for each gender
-    Women = n_distinct(Discipline[Gender == "Women"]),
-    Men   = n_distinct(Discipline[Gender == "Men"])
-  ) %>%
-  ungroup()
-
-
-global_trends_long <- global_gender_trends %>%
-  pivot_longer(
-    cols = c("Women", "Men"),
-    names_to = "Gender",      
-    values_to = "Count"       
+# Add IS_Host column that indicate whether it was hosted country
+olympics <- olympics %>%
+  mutate(
+    # Define the Host Country Code for each City
+    Host_NOC = case_when(
+      # Summer games
+      City == "Athens"      ~ "GRE",
+      City == "Paris"       ~ "FRA",
+      City == "St Louis"    ~ "USA", 
+      City == "London"      ~ "GBR",
+      City == "Stockholm"   ~ "SWE",
+      City == "Antwerp"     ~ "BEL",
+      City == "Amsterdam"   ~ "NED",
+      City == "Los Angeles" ~ "USA",
+      City == "Berlin"      ~ "GER",
+      City == "Helsinki"    ~ "FIN",
+      City == "Melbourne / Stockholm" ~ "AUS", # Handle "SWE" separately below
+      City == "Rome"        ~ "ITA",
+      City == "Tokyo"       ~ "JPN",
+      City == "Mexico"      ~ "MEX",
+      City == "Munich"      ~ "FRG", # West Germany hosted in 1972
+      City == "Montreal"    ~ "CAN",
+      City == "Moscow"      ~ "URS", # Soviet Union hosted in 1980
+      City == "Seoul"       ~ "KOR",
+      City == "Barcelona"   ~ "ESP",
+      City == "Atlanta"     ~ "USA",
+      City == "Sydney"      ~ "AUS",
+      City == "Beijing"     ~ "CHN",
+      
+      # Winter games
+      City == "Chamonix"    ~ "FRA",
+      City == "St.Moritz"   ~ "SUI",
+      City == "Lake Placid" ~ "USA",
+      City == "Garmisch Partenkirchen" ~ "GER",
+      City == "Oslo"        ~ "NOR",
+      City == "Cortina d'Ampezzo" ~ "ITA",
+      City == "Squaw Valley" ~ "USA",
+      City == "Innsbruck"   ~ "AUT",
+      City == "Grenoble"    ~ "FRA",
+      City == "Sapporo"     ~ "JPN",
+      City == "Sarajevo"    ~ "YUG", # Yugoslavia hosted in 1984
+      City == "Calgary"     ~ "CAN",
+      City == "Albertville" ~ "FRA",
+      City == "Lillehammer" ~ "NOR",
+      City == "Nagano"      ~ "JPN",
+      City == "Salt Lake City" ~ "USA",
+      City == "Turin"       ~ "ITA",
+      City == "Vancouver"   ~ "CAN",
+      City == "Sochi"       ~ "RUS",
+      TRUE ~ NA_character_
+    ),
+    # Create the Binary Column (1 = Yes, 0 = No)
+    is_host = case_when(
+      # The country matches the host map
+      Country == Host_NOC ~ 1,
+      # SPECIAL CASE: 1956 Equestrian Events in Stockholm (while main games were in AUS)
+      City == "Melbourne / Stockholm" & Country == "SWE" ~ 1,
+      # Otherwise, not the host
+      TRUE ~ 0
+    )
   )
 
-# Look at the transformed data structure
-head(global_trends_long)
-
-library(ggplot2)
-
-ggplot(global_trends_long, aes(x = Year, y = Count, color = Gender)) +
-
-  geom_line(size = 1.2) +
-  geom_point(size = 3, alpha = 0.7) +
-  
-
-  scale_color_manual(values = c("Men" = "#2c7bb6", "Women" = "#d7191c")) +
-  
-  scale_x_continuous(breaks = seq(1924, 2014, by = 8)) + # Show every 8 years to avoid crowding
-  scale_y_continuous(limits = c(0, NA)) + # Ensure Y axis starts at 0
-  labs(
-    title = "The Closing Gap: Winter Olympic Disciplines by Gender (1924-2014)",
-    subtitle = "Number of unique disciplines in which Men vs. Women competed globally",
-    y = "Number of Unique Disciplines",
-    x = "Olympic Year",
-    caption = "Source: Winter Olympics Dataset"
-  ) +
-  
-
-  theme_minimal() +
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    legend.position = "top", # Move legend to top to save width
-    panel.grid.minor.x = element_blank() # Remove extra vertical grid lines
-  )
