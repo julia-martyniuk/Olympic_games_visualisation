@@ -244,3 +244,59 @@ img_disc_by_gndr <- disc_by_gndr +
                 top = 0.98, # 1
                 align_to = "plot")
 img_disc_by_gndr
+
+################################################################################
+################################################################################
+# Share of women in the teams
+
+# Top 15 Countries by distinct ATHLETES sent
+top_big_teams_15_countries <- olympics %>%
+  group_by(Country_Link) %>%
+  summarise(Total_Unique_Athletes = n_distinct(Athlete_name)) %>% 
+  arrange(desc(Total_Unique_Athletes)) %>%
+  slice_head(n = 15) %>%
+  pull(Country_Link)
+
+# Calculate Team Composition per Year/Season
+yearly_team_composition <- olympics %>%
+  filter(Country_Link %in% top_big_teams_15_countries) %>%
+  group_by(Year, Season, Country_Link) %>%
+  summarise(
+    Total_Athletes = n_distinct(Athlete_name),
+    Women_Count = n_distinct(Athlete_name[Gender == "Women"]),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Share_Women = Women_Count / Total_Athletes
+  )
+
+
+share_w_in_team_pl <- ggplot(yearly_team_composition, aes(x = Total_Athletes, y = Share_Women, 
+                                   size = Total_Athletes, color = Country_Link)) +
+  # Use points for the bubbles
+  geom_point(alpha = 0.7) +
+  # Add a reference line for 50% parity
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
+  annotate("text", x = max(yearly_team_composition$Total_Athletes), y = 0.52, 
+           label = "Parity (50%)", hjust = 1, color = "gray50") +
+  scale_size(range = c(3, 15), name = "Team Size") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 0.6)) +
+  scale_x_log10() + 
+  facet_wrap(~Season, scales = "free_x") +
+  
+  theme_minimal() +
+  labs(
+    x = "Team Size (Log Scale)",
+    y = "Percentage of Women in Team",
+    caption = "Source: Olympics Dataset"
+  )
+
+# Animate
+anim_share_w_in_team <- share_w_in_team_pl + 
+  labs(title = 'Year: {frame_time}') + 
+  transition_time(Year) +   # drives the time change
+  ease_aes('linear')   # Smooths the transition between years
+
+# Render the animation
+animate(anim_share_w_in_team, fps = 10, duration = 20, width = 800, height = 500, renderer = gifski_renderer())
+
