@@ -300,3 +300,63 @@ anim_share_w_in_team <- share_w_in_team_pl +
 # Render the animation
 animate(anim_share_w_in_team, fps = 10, duration = 20, width = 800, height = 500, renderer = gifski_renderer())
 
+################################################################################
+################################################################################
+# Most summer and winter country winners (by number of medals) 
+# This plot illustrate whether country tends to win mostly during summer or winter games
+
+seasonality_cntr <- olympics %>%
+  group_by(Country_Link, Season) %>%
+  summarise(Total_Medals = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Season, values_from = Total_Medals, values_fill = 0) %>%
+  filter(Summer > 0, Winter > 0) %>%
+  mutate(Type = case_when(
+    # rules for the winter and summer winners
+    Winter > Summer * 0.4 ~ "Winter power",  
+    Summer > Winter * 10 ~ "Summer power",
+    TRUE ~ "General"
+  ))
+
+winter_giants <- seasonality_cntr %>% 
+  filter(Type == "Winter power")
+
+# Highlighted Region: 'Winter Powers' (Polygon created via Convex Hull)
+hull_indices <- chull(winter_giants$Summer, winter_giants$Winter) # returns the row numbers of the points that make up the outer shape
+hull_data <- winter_giants[hull_indices, ]
+
+seasonality_cntr_pl <- ggplot(seasonality_cntr, aes(x = Summer, y = Winter)) +
+  geom_polygon(data = hull_data, fill = "deepskyblue", alpha = 0.2) +
+  geom_point(aes(color = Type), size = 3, alpha = 0.7) +
+  # Labels
+  geom_text_repel(aes(label = Country_Link), 
+                  size = 3, 
+                  max.overlaps = 15,
+                  box.padding = 0.4) +
+  # Scales
+  scale_x_log10() + 
+  scale_y_log10() +
+  # Formatting
+  scale_color_manual(values = c("General" = "gray", "Summer power" = "orange", "Winter power" = "deepskyblue")) +
+  theme_bw() + 
+  theme(
+    plot.title = element_text(color= "black",face = "bold", size = 20),
+    axis.title = element_text(color = "grey31"),
+    legend.background = element_rect(color='black', fill=NA),
+    legend.box = "vertical",
+  ) +
+  labs(
+    title = "Geography is destiny: summer vs. winter winners",
+    x = "Total summer medals (log scale)",
+    y = "Total winter medals (log scale)",
+    caption = "Source: Olympics Dataset"
+  )
+
+img_seasonality_cntr_pl <- seasonality_cntr_pl +                  
+  inset_element(p = logo,
+                left = 0.02, 
+                bottom = 0.82,
+                right = 0.15,
+                top = 0.98, 
+                align_to = "panel")
+img_seasonality_cntr_pl
+
