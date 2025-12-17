@@ -300,3 +300,224 @@ anim_share_w_in_team <- share_w_in_team_pl +
 # Render the animation
 animate(anim_share_w_in_team, fps = 10, duration = 20, width = 800, height = 500, renderer = gifski_renderer())
 
+################################################################################
+################################################################################
+# Most summer and winter country winners (by number of medals) 
+# This plot illustrates whether country tends to win mostly during summer or winter games
+
+seasonality_cntr <- olympics %>%
+  group_by(Country_Link, Season) %>%
+  summarise(Total_Medals = n(), .groups = "drop") %>%
+  pivot_wider(names_from = Season, values_from = Total_Medals, values_fill = 0) %>%
+  filter(Summer > 0, Winter > 0) %>%
+  mutate(Type = case_when(
+    # rules for the winter and summer winners
+    Winter > Summer * 0.4 ~ "Winter power",  
+    Summer > Winter * 10 ~ "Summer power",
+    TRUE ~ "General"
+  ))
+
+winter_giants <- seasonality_cntr %>% 
+  filter(Type == "Winter power")
+
+# Highlighted Region: 'Winter Powers' (Polygon created via Convex Hull)
+hull_indices <- chull(winter_giants$Summer, winter_giants$Winter) # returns the row numbers of the points that make up the outer shape
+hull_data <- winter_giants[hull_indices, ]
+
+seasonality_cntr_pl <- ggplot(seasonality_cntr, aes(x = Summer, y = Winter)) +
+  geom_polygon(data = hull_data, fill = "deepskyblue", alpha = 0.2) +
+  geom_point(aes(color = Type), size = 3, alpha = 0.7) +
+  # Labels
+  geom_text_repel(aes(label = Country_Link), 
+                  size = 3, 
+                  max.overlaps = 15,
+                  box.padding = 0.4) +
+  # Scales
+  scale_x_log10() + 
+  scale_y_log10() +
+  # Formatting
+  scale_color_manual(values = c("General" = "gray", "Summer power" = "orange", "Winter power" = "deepskyblue")) +
+  theme_bw() + 
+  theme(
+    plot.title = element_text(color= "black",face = "bold", size = 20),
+    axis.title = element_text(color = "grey31"),
+    legend.background = element_rect(color='black', fill=NA),
+    legend.box = "vertical",
+  ) +
+  labs(
+    title = "Geography is destiny: summer vs. winter winners",
+    x = "Total summer medals (log scale)",
+    y = "Total winter medals (log scale)",
+    caption = "Source: Olympics Dataset"
+  )
+
+img_seasonality_cntr_pl <- seasonality_cntr_pl +                  
+  inset_element(p = logo,
+                left = 0.02, 
+                bottom = 0.82,
+                right = 0.15,
+                top = 0.98, 
+                align_to = "panel")
+img_seasonality_cntr_pl
+
+################################################################################
+################################################################################
+# Show top 10 countries that received the most medals per year
+annual_medal_counts <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  mutate(Country_Name = if("Country_Link" %in% names(.)) Country_Link else Country) %>%
+  group_by(Year, Country_Name) %>%
+  summarise(Yearly_Medals = n(), .groups = "drop")
+
+# Calculate racing for the countries by years
+racing_cntr_data <- annual_medal_counts %>%
+  complete(Year = unique(Year), Country_Name, fill = list(Yearly_Medals = 0)) %>% # fill 0 if countries missed games
+  group_by(Country_Name) %>%
+  arrange(Year) %>%
+  mutate(Cumulative_Total = cumsum(Yearly_Medals)) %>%
+  ungroup() %>%
+  group_by(Year) %>%   # Calculate Rank for EACH Year
+  mutate(
+    Rank = rank(-Cumulative_Total, ties.method = "first"),
+    Value_Rel = Cumulative_Total / max(Cumulative_Total)
+  ) %>%
+  ungroup() %>%
+  # Filter for only the Top 10 at any given moment
+  filter(Rank <= 10) %>%
+  filter(Cumulative_Total > 0)
+
+# Create the Static Plot
+racing_cntr_pl <- ggplot(racing_cntr_data, aes(x = Rank, y = Cumulative_Total, fill = Country_Name, group = Country_Name)) +
+  geom_col(width = 0.9, alpha = 0.8) + # bars
+  geom_text(aes(y = 0, label = paste(Country_Name, " ")), vjust = 0.2, hjust = 1, size = 5, fontface = "bold") +
+  geom_text(aes(y = Cumulative_Total, label = as.character(Cumulative_Total)), hjust = -0.1, size = 5) +
+  coord_flip(clip = "off", expand = FALSE) +  # Swap Axes: We want horizontal bars (Rank on Y, Count on X)
+  scale_x_reverse() +   # Invert Rank so #1 is at the top
+  scale_fill_viridis_d(option = "turbo", guide = "none") + # "turbo" gives distinct vibrant colors
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(), # Hide rank numbers
+    axis.title = element_blank(),
+    plot.margin = margin(1, 4, 1, 6, "cm"), # Extra margin for labels
+    plot.title = element_text(size = 22, face = "bold"),
+    plot.subtitle = element_text(size = 14, color = "grey50")
+  )
+
+# Add Animation
+anim_racing_cntr_pl <- racing_cntr_pl + 
+  transition_time(Year) + 
+  view_follow(fixed_y = TRUE) + # X-axis moves, Y-axis (Rank 1-10) stays
+  labs(title = 'All-time medal leaders in {frame_time}')
+animate(anim_racing_cntr_pl, fps = 20, duration = 25, width = 800, height = 600, renderer = gifski_renderer())
+
+################################################################################
+################################################################################
+# Medals breakdown per top 10 countries
+
+cntr_medal_counts <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  group_by(Country_Link, Medal) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Medal = factor(Medal, levels = c("Gold", "Silver", "Bronze")))
+
+# Top 10 Countries by total medals
+top_10_cntr_medals <- cntr_medal_counts %>%
+  group_by(Country_Link) %>%
+  summarise(Total = sum(Count)) %>%
+  arrange(desc(Total)) %>%
+  slice_head(n = 10) %>%
+  pull(Country_Link)
+
+
+top_10_cntr_medals_pl_data <- cntr_medal_counts %>%
+  filter(Country_Link %in% top_10_cntr_medals)
+
+top_10_cntr_medals_pl <- ggplot(top_10_cntr_medals_pl_data, aes(x = reorder(Country_Link, -Count), y = Count, fill = Medal)) +
+                            geom_col(position = "dodge", width = 0.7) +
+                            geom_text(aes(label = Count), 
+                                      position = position_dodge(width = 0.7), 
+                                      vjust = -0.5, size = 3, fontface = "bold") +
+                            scale_fill_manual(values = c("Gold" = "#FFD700",   
+                                                         "Silver" = "#C0C0C0", 
+                                                         "Bronze" = "#CD7F32")) + 
+                            theme_minimal() +
+                            labs(
+                              title = "Top 10 Olympic countries: medal breakdown",
+                              x = NULL,
+                              y = "Number of medals",
+                              fill = "Medal type"
+                            ) +
+                            theme(
+                              legend.position = "top",
+                              axis.text.x = element_text(angle = 45, hjust = 1, size = 11, face = "bold"),
+                              panel.grid.major.x = element_blank(),
+                              plot.title = element_text(color= "black",face = "bold", size = 20),
+                              axis.title = element_text(color = "grey31")
+                            )
+ 
+img_top_10_cntr_medals_pl <-  top_10_cntr_medals_pl +                  
+                              inset_element(p = logo,
+                                            left = 0.80, 
+                                            bottom = 0.85,
+                                            right = 1,
+                                            top = 1, 
+                                            align_to = "panel")
+img_top_10_cntr_medals_pl
+################################################################################
+################################################################################
+# IN PROGRESS (added two season on one plot?)
+
+# Take one country and season (take Great Britain for now) 
+target_country <- "GBR"
+target_season <- "Summer"
+
+country_path <- olympics %>%
+  filter(Country_Link == target_country) %>% 
+  filter(Season == target_season) %>% 
+  group_by(Year, City) %>%
+  summarise(
+    Total_Medals = sum(!is.na(Medal)),        
+    Team_Size = n_distinct(Athlete_name),    
+    .groups = "drop"
+  ) %>%
+  mutate(Label = paste0(City)) # Alternatively could (City," ('", substr(Year, 3, 4), ")") 
+
+country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
+                    # The Trend Line 
+                    geom_smooth(method = "loess", span = 0.6, color = "red", fill = "red", alpha = 0.1) +
+                    # The Connecting Line
+                    geom_line(color = "red", alpha = 0.4, size = 1) +
+                    # The Bubbles (Size = Team Size)
+                    geom_point(aes(size = Team_Size), color = "red", fill = "red", shape = 21, alpha = 0.8) +
+                    # The Labels 
+                    geom_text_repel(aes(label = Label), 
+                                    size = 3, 
+                                    point.padding = 0.5,
+                                    segment.color = "grey50",
+                                    max.overlaps = 20) +
+                    
+                    scale_size_continuous(range = c(2, 10), name = "Team size") +
+                    scale_x_continuous(breaks = seq(1896, 2012, 4)) + 
+                    theme_minimal() +
+                    theme(
+                      legend.position = "top",
+                      panel.grid.minor = element_blank(),
+                      plot.title = element_text(color= "black",face = "bold", size = 20),
+                      axis.text = element_text(color = "grey31",size = 10)
+                    ) +
+                    
+                    labs(
+                      title = paste("The performance trajectory of", target_country, target_season),
+                      subtitle = "Tracking Medal count vs. Team size over history",
+                      x = "Year",
+                      y = "Total Medals Won"
+                    )
+img_country_path_pl <-  country_path_pl +                  
+  inset_element(p = logo,
+                left = 0.80, 
+                bottom = 0.85,
+                right = 1,
+                top = 1, 
+                align_to = "panel")
+img_country_path_pl
