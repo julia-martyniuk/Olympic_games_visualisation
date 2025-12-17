@@ -410,3 +410,58 @@ anim_racing_cntr_pl <- racing_cntr_pl +
   view_follow(fixed_y = TRUE) + # X-axis moves, Y-axis (Rank 1-10) stays
   labs(title = 'All-time medal leaders in {frame_time}')
 animate(anim_racing_cntr_pl, fps = 20, duration = 25, width = 800, height = 600, renderer = gifski_renderer())
+
+################################################################################
+################################################################################
+# 
+
+cntr_medal_counts <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  group_by(Country_Link, Medal) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Medal = factor(Medal, levels = c("Gold", "Silver", "Bronze")))
+
+# Top 10 Countries by total medals
+top_10_cntr_medals <- cntr_medal_counts %>%
+  group_by(Country_Link) %>%
+  summarise(Total = sum(Count)) %>%
+  arrange(desc(Total)) %>%
+  slice_head(n = 10) %>%
+  pull(Country_Link)
+
+
+top_10_cntr_medals_pl_data <- cntr_medal_counts %>%
+  filter(Country_Link %in% top_10_cntr_medals)
+
+top_10_cntr_medals_pl <- ggplot(top_10_cntr_medals_pl_data, aes(x = reorder(Country_Link, -Count), y = Count, fill = Medal)) +
+                            geom_col(position = "dodge", width = 0.7) +
+                            geom_text(aes(label = Count), 
+                                      position = position_dodge(width = 0.7), 
+                                      vjust = -0.5, size = 3, fontface = "bold") +
+                            scale_fill_manual(values = c("Gold" = "#FFD700",   
+                                                         "Silver" = "#C0C0C0", 
+                                                         "Bronze" = "#CD7F32")) + 
+                            theme_minimal() +
+                            labs(
+                              title = "Top 10 Olympic countries: medal breakdown",
+                              x = NULL,
+                              y = "Number of medals",
+                              fill = "Medal type"
+                            ) +
+                            theme(
+                              legend.position = "top",
+                              axis.text.x = element_text(angle = 45, hjust = 1, size = 11, face = "bold"),
+                              panel.grid.major.x = element_blank(),
+                              plot.title = element_text(color= "black",face = "bold", size = 20),
+                              axis.title = element_text(color = "grey31")
+                            )
+ 
+img_top_10_cntr_medals_pl <-  top_10_cntr_medals_pl +                  
+                              inset_element(p = logo,
+                                            left = 0.80, 
+                                            bottom = 0.85,
+                                            right = 1,
+                                            top = 1, 
+                                            align_to = "panel")
+img_top_10_cntr_medals_pl
+
