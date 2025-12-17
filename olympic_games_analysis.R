@@ -303,7 +303,7 @@ animate(anim_share_w_in_team, fps = 10, duration = 20, width = 800, height = 500
 ################################################################################
 ################################################################################
 # Most summer and winter country winners (by number of medals) 
-# This plot illustrate whether country tends to win mostly during summer or winter games
+# This plot illustrates whether country tends to win mostly during summer or winter games
 
 seasonality_cntr <- olympics %>%
   group_by(Country_Link, Season) %>%
@@ -360,3 +360,53 @@ img_seasonality_cntr_pl <- seasonality_cntr_pl +
                 align_to = "panel")
 img_seasonality_cntr_pl
 
+################################################################################
+################################################################################
+# Show top 10 countries that received the most medals per year
+annual_medal_counts <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  mutate(Country_Name = if("Country_Link" %in% names(.)) Country_Link else Country) %>%
+  group_by(Year, Country_Name) %>%
+  summarise(Yearly_Medals = n(), .groups = "drop")
+
+# Calculate racing for the countries by years
+racing_cntr_data <- annual_medal_counts %>%
+  complete(Year = unique(Year), Country_Name, fill = list(Yearly_Medals = 0)) %>% # fill 0 if countries missed games
+  group_by(Country_Name) %>%
+  arrange(Year) %>%
+  mutate(Cumulative_Total = cumsum(Yearly_Medals)) %>%
+  ungroup() %>%
+  group_by(Year) %>%   # Calculate Rank for EACH Year
+  mutate(
+    Rank = rank(-Cumulative_Total, ties.method = "first"),
+    Value_Rel = Cumulative_Total / max(Cumulative_Total)
+  ) %>%
+  ungroup() %>%
+  # Filter for only the Top 10 at any given moment
+  filter(Rank <= 10) %>%
+  filter(Cumulative_Total > 0)
+
+# Create the Static Plot
+racing_cntr_pl <- ggplot(racing_cntr_data, aes(x = Rank, y = Cumulative_Total, fill = Country_Name, group = Country_Name)) +
+  geom_col(width = 0.9, alpha = 0.8) + # bars
+  geom_text(aes(y = 0, label = paste(Country_Name, " ")), vjust = 0.2, hjust = 1, size = 5, fontface = "bold") +
+  geom_text(aes(y = Cumulative_Total, label = as.character(Cumulative_Total)), hjust = -0.1, size = 5) +
+  coord_flip(clip = "off", expand = FALSE) +  # Swap Axes: We want horizontal bars (Rank on Y, Count on X)
+  scale_x_reverse() +   # Invert Rank so #1 is at the top
+  scale_fill_viridis_d(option = "turbo", guide = "none") + # "turbo" gives distinct vibrant colors
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(), # Hide rank numbers
+    axis.title = element_blank(),
+    plot.margin = margin(1, 4, 1, 6, "cm"), # Extra margin for labels
+    plot.title = element_text(size = 22, face = "bold"),
+    plot.subtitle = element_text(size = 14, color = "grey50")
+  )
+
+# Add Animation
+anim_racing_cntr_pl <- racing_cntr_pl + 
+  transition_time(Year) + 
+  view_follow(fixed_y = TRUE) + # X-axis moves, Y-axis (Rank 1-10) stays
+  labs(title = 'All-time medal leaders in {frame_time}')
+animate(anim_racing_cntr_pl, fps = 20, duration = 25, width = 800, height = 600, renderer = gifski_renderer())
