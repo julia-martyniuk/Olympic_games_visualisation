@@ -413,7 +413,7 @@ animate(anim_racing_cntr_pl, fps = 20, duration = 25, width = 800, height = 600,
 
 ################################################################################
 ################################################################################
-# 
+# Medals breakdown per top 10 countries
 
 cntr_medal_counts <- olympics %>%
   filter(!is.na(Medal)) %>%
