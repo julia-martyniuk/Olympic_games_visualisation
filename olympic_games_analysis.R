@@ -464,4 +464,60 @@ img_top_10_cntr_medals_pl <-  top_10_cntr_medals_pl +
                                             top = 1, 
                                             align_to = "panel")
 img_top_10_cntr_medals_pl
+################################################################################
+################################################################################
+# IN PROGRESS (added two season on one plot?)
 
+# Take one country and season (take Great Britain for now) 
+target_country <- "GBR"
+target_season <- "Summer"
+
+country_path <- olympics %>%
+  filter(Country_Link == target_country) %>% 
+  filter(Season == target_season) %>% 
+  group_by(Year, City) %>%
+  summarise(
+    Total_Medals = sum(!is.na(Medal)),        
+    Team_Size = n_distinct(Athlete_name),    
+    .groups = "drop"
+  ) %>%
+  mutate(Label = paste0(City)) # Alternatively could (City," ('", substr(Year, 3, 4), ")") 
+
+country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
+                    # The Trend Line 
+                    geom_smooth(method = "loess", span = 0.6, color = "red", fill = "red", alpha = 0.1) +
+                    # The Connecting Line
+                    geom_line(color = "red", alpha = 0.4, size = 1) +
+                    # The Bubbles (Size = Team Size)
+                    geom_point(aes(size = Team_Size), color = "red", fill = "red", shape = 21, alpha = 0.8) +
+                    # The Labels 
+                    geom_text_repel(aes(label = Label), 
+                                    size = 3, 
+                                    point.padding = 0.5,
+                                    segment.color = "grey50",
+                                    max.overlaps = 20) +
+                    
+                    scale_size_continuous(range = c(2, 10), name = "Team size") +
+                    scale_x_continuous(breaks = seq(1896, 2012, 4)) + 
+                    theme_minimal() +
+                    theme(
+                      legend.position = "top",
+                      panel.grid.minor = element_blank(),
+                      plot.title = element_text(color= "black",face = "bold", size = 20),
+                      axis.text = element_text(color = "grey31",size = 10)
+                    ) +
+                    
+                    labs(
+                      title = paste("The performance trajectory of", target_country, target_season),
+                      subtitle = "Tracking Medal count vs. Team size over history",
+                      x = "Year",
+                      y = "Total Medals Won"
+                    )
+img_country_path_pl <-  country_path_pl +                  
+  inset_element(p = logo,
+                left = 0.80, 
+                bottom = 0.85,
+                right = 1,
+                top = 1, 
+                align_to = "panel")
+img_country_path_pl
