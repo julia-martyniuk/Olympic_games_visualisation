@@ -157,6 +157,14 @@ growth_n_events <- olympics %>%
 
 n_events_growth_pl <-  
   ggplot(growth_n_events, aes(x = Year, y = Count, color = Season, linetype = Metric)) +
+  # WWI (1914-1918)
+  annotate("rect", xmin = 1914, xmax = 1918, ymin = -Inf, ymax = Inf,
+           fill = "#ffb6c1", alpha = 0.3) +
+  
+  # WWII (1939-1945)
+  annotate("rect", xmin = 1939, xmax = 1945, ymin = -Inf, ymax = Inf,
+           fill = "#ffb6c1", alpha = 0.3) +
+  
         geom_line(size = 1.2) +
         geom_point(aes(shape = Metric), size = 3) + 
         scale_color_manual(values = c("Summer" = "#d7191c", "Winter" = "#2c7bb6")) +
@@ -635,3 +643,5 @@ server <- function(input, output) {
 }
 # Run the app
 shinyApp(ui = ui, server = server)
+
+
