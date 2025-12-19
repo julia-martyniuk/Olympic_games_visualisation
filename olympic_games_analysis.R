@@ -13,6 +13,8 @@ library(ggrepel)
 library(gganimate)
 library(jpeg)
 library(patchwork)
+library(magick)
+library(shiny)
 ################################################################################
 ################################################################################
 ######## Data preprocessing ########
@@ -466,16 +468,15 @@ img_top_10_cntr_medals_pl <-  top_10_cntr_medals_pl +
 img_top_10_cntr_medals_pl
 ################################################################################
 ################################################################################
-# IN PROGRESS (added two season on one plot?)
-
-# Take one country and season (take Great Britain for now) 
+# Performance of the countries estimated in the number of medals by years 
+# Static plot (country and season should be typped manually)
 target_country <- "GBR"
 target_season <- "Summer"
 
 country_path <- olympics %>%
   filter(Country_Link == target_country) %>% 
   filter(Season == target_season) %>% 
-  group_by(Year, City) %>%
+  group_by(Year, City, is_host) %>%
   summarise(
     Total_Medals = sum(!is.na(Medal)),        
     Team_Size = n_distinct(Athlete_name),    
@@ -484,40 +485,153 @@ country_path <- olympics %>%
   mutate(Label = paste0(City)) # Alternatively could (City," ('", substr(Year, 3, 4), ")") 
 
 country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
-                    # The Trend Line 
-                    geom_smooth(method = "loess", span = 0.6, color = "red", fill = "red", alpha = 0.1) +
-                    # The Connecting Line
-                    geom_line(color = "red", alpha = 0.4, size = 1) +
-                    # The Bubbles (Size = Team Size)
-                    geom_point(aes(size = Team_Size), color = "red", fill = "red", shape = 21, alpha = 0.8) +
-                    # The Labels 
-                    geom_text_repel(aes(label = Label), 
-                                    size = 3, 
-                                    point.padding = 0.5,
-                                    segment.color = "grey50",
-                                    max.overlaps = 20) +
-                    
-                    scale_size_continuous(range = c(2, 10), name = "Team size") +
-                    scale_x_continuous(breaks = seq(1896, 2012, 4)) + 
-                    theme_minimal() +
-                    theme(
-                      legend.position = "top",
-                      panel.grid.minor = element_blank(),
-                      plot.title = element_text(color= "black",face = "bold", size = 20),
-                      axis.text = element_text(color = "grey31",size = 10)
-                    ) +
-                    
-                    labs(
-                      title = paste("The performance trajectory of", target_country, target_season),
-                      subtitle = "Tracking Medal count vs. Team size over history",
-                      x = "Year",
-                      y = "Total Medals Won"
-                    )
+                      geom_smooth(method = "loess", span = 0.5, color = "gray60",  fill = "gray80", alpha = 0.2) + 
+                      geom_line(color = "gray80", size = 1) +
+                      # Bubbles
+                      geom_point(aes(size = Team_Size, fill = factor(is_host)), shape = 21, color = "white", stroke = 0.5) +
+                      # Labels
+                      geom_text_repel(aes(label = Label), 
+                                      box.padding = 0.5, 
+                                      point.padding = 0.5,
+                                      size = 3, 
+                                      color = "black",
+                                      max.overlaps = 50) + 
+                      scale_size_continuous(range = c(3, 12), name = "Team Size") +
+                      scale_x_continuous(breaks = seq(1896, 2016, 8)) +
+                      
+                      scale_fill_manual(
+                        name = "Status",
+                        values = c("0" = "#2c7bb6", "1" = "#d7191c"), 
+                        labels = c("0" = "Visitor", "1" = "Host")     
+                      ) +
+                      
+                      guides(
+                        fill = guide_legend(order = 1,, override.aes = list(size = 5) ), 
+                        size = guide_legend(order = 2, override.aes = list(fill = "gray50")) 
+                      ) +
+                      
+                      theme_minimal() +
+                      theme(
+                        legend.position = "top",
+                        legend.box = "horizontal",      
+                        legend.box.just = "center",     
+                        legend.margin = margin(t = 5, b = 5), 
+                        legend.spacing.x = unit(0.5, 'cm'), 
+                        legend.title = element_text(size = 12, face = "bold"),
+                        legend.text = element_text(size = 10),
+                        plot.title = element_text(face = "bold", size = 16),
+                        panel.grid.minor = element_blank(),
+                        axis.title = element_text(color = "grey31")
+                      ) +
+                      
+                      labs(
+                        title = paste("Performance history of", target_country),
+                        x = "Year",
+                        y = "Total medals won"
+                      )
+
 img_country_path_pl <-  country_path_pl +                  
   inset_element(p = logo,
                 left = 0.80, 
                 bottom = 0.85,
                 right = 1,
                 top = 1, 
-                align_to = "panel")
+                align_to = "plot")
 img_country_path_pl
+
+################################################################################
+################################################################################
+# Performance of the countries estimated in the number of medals by years 
+# Dynamic plot 
+ui <- fluidPage(
+  titlePanel("Olympic performance"),
+  sidebarLayout(
+    sidebarPanel(
+      h4("Settings"),
+      selectInput(inputId = "selected_country", 
+                  label = "Choose a country:", 
+                  choices = sort(unique(olympics$Country_Link)),
+                  selected = "GBR"), 
+      selectInput(inputId = "selected_season", 
+                  label = "Choose season:", 
+                  choices = c("Summer", "Winter"), 
+                  selected = "Summer"),
+      hr()
+    ),
+    
+    mainPanel(
+      plotOutput("coolPlot", height = "600px")
+    )
+  )
+)
+server <- function(input, output) {
+  output$coolPlot <- renderPlot({
+    target_country <- input$selected_country
+    target_season  <- input$selected_season
+    
+    # data for the plot
+    country_path <- olympics %>%
+      filter(Country_Link == target_country) %>% 
+      filter(Season == target_season) %>% 
+      group_by(Year, City, is_host) %>% 
+      summarise(
+        Total_Medals = sum(!is.na(Medal)),        
+        Team_Size = n_distinct(Athlete_name),     
+        .groups = "drop"
+      ) %>%
+      mutate(Label = City)
+    
+    #  prevent errors for countries with no medals
+    if(nrow(country_path) == 0) return(NULL)
+    
+    # plot
+    country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
+      geom_smooth(method = "loess", span = 0.5, color = "gray60",  fill = "gray80", alpha = 0.2) + 
+      geom_line(color = "gray80", size = 1) +
+      # Bubbles
+      geom_point(aes(size = Team_Size, fill = factor(is_host)), shape = 21, color = "white", stroke = 0.5) +
+      # Labels
+      geom_text_repel(aes(label = Label), 
+                      box.padding = 0.5, 
+                      point.padding = 0.5,
+                      size = 3, 
+                      color = "black",
+                      max.overlaps = 50) + 
+      scale_size_continuous(range = c(3, 12), name = "Team Size") +
+      scale_x_continuous(breaks = seq(1896, 2016, 8)) +
+      
+      scale_fill_manual(
+        name = "Status",
+        values = c("0" = "#2c7bb6", "1" = "#d7191c"), 
+        labels = c("0" = "Visitor", "1" = "Host")     
+      ) +
+      
+      guides(
+        fill = guide_legend(order = 1,, override.aes = list(size = 5) ), 
+        size = guide_legend(order = 2, override.aes = list(fill = "gray50")) 
+      ) +
+      
+      theme_minimal() +
+      theme(
+        legend.position = "top",
+        legend.box = "horizontal",      
+        legend.box.just = "center",     
+        legend.margin = margin(t = 5, b = 5), 
+        legend.spacing.x = unit(0.5, 'cm'), 
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(face = "bold", size = 16),
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(color = "grey31")
+      ) +
+
+      labs(
+        title = paste("Performance:", target_country, "(",target_season,")"),
+        x = "Year",
+        y = "Total Medals Won"
+      )
+    country_path_pl + inset_element(p = logo, left = 0.85, bottom = 0.80, right = 1, top = 1, align_to = "plot")
+  })
+}
+# Run the app
+shinyApp(ui = ui, server = server)
