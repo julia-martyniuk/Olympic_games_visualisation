@@ -644,4 +644,113 @@ server <- function(input, output) {
 # Run the app
 shinyApp(ui = ui, server = server)
 
+################################################################################
+################################################################################
+# Number of wins when the country is a host
+# Version 1
+annual_medals <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  group_by(Year, Country_Link, is_host) %>% 
+  summarise(Total_Medals = n(), .groups = "drop")
+
+dumbbell_data <- annual_medals %>%
+  group_by(Country_Link) %>%
+  filter(sum(is_host) > 0) %>%
+  group_by(Country_Link, is_host) %>%
+  summarise(Avg_Medals = mean(Total_Medals), .groups = "drop") %>%
+  pivot_wider(names_from = is_host, 
+              values_from = Avg_Medals, 
+              names_prefix = "Status_") %>%
+  rename(Visiting = Status_0, Hosting = Status_1) %>%
+  mutate(Gap = Hosting - Visiting) 
+
+hosting_adv_pl <-  ggplot(dumbbell_data, aes(y = reorder(Country_Link, Gap))) + 
+                # Segment (grey line)
+                geom_segment(aes(x = Visiting, xend = Hosting, y = Country_Link, yend = Country_Link), 
+                             color = "#b2b2b2", size = 1) +
+                geom_point(aes(x = Visiting, color = "Visiting"), size = 3) +
+                geom_point(aes(x = Hosting, color = "Hosting"), size = 4) +
+                scale_color_manual(
+                  name = "Status", 
+                  values = c("Visiting" = "#95a5a6", "Hosting" = "#d7191c"),
+                  breaks = c("Visiting", "Hosting") 
+                ) +
+                
+                theme_minimal() +
+                labs(
+                  title = "Do countries win more when they host?",
+                  x = "Average medals won",
+                  y = NULL,
+                  caption = "Ordered by the magnitude of the 'home advantage' gap"
+                ) +
+                theme(
+                  legend.position = "top",
+                  legend.box = "horizontal",      
+                  legend.box.just = "center", 
+                  panel.grid.major.y = element_blank(), 
+                  axis.text.y = element_text(face = "bold", size = 10),
+                  plot.title = element_text(face = "bold", size = 16),
+                )
+
+img_hosting_adv_pl <-  hosting_adv_pl +                  
+  inset_element(p = logo,
+                left = 0.80, 
+                bottom = 0.90,
+                right = 1,
+                top = 1, 
+                align_to = "plot")
+img_hosting_adv_pl
+
+################################################################################
+################################################################################
+# Number of wins when the country is a host
+# Version 2
+
+home_advantage <- annual_medals %>%
+  group_by(Country_Link) %>%
+  # We only care about countries that have actually hosted
+  filter(sum(is_host) > 0) %>%
+  summarise(
+    Hosting = mean(Total_Medals[is_host == 1]),
+    Visiting = mean(Total_Medals[is_host == 0])
+  ) %>%
+  # Keep only countries with significant data  > 10 medals avg to remove noise
+  filter(Visiting > 10) %>%
+  ungroup()
+
+plot_data <- home_advantage %>%
+  pivot_longer(cols = c("Hosting", "Visiting"), 
+               names_to = "Context", 
+               values_to = "Avg_Medals")
+
+hosting_adv_pl_2 <- ggplot(plot_data, aes(x = reorder(Country_Link, Avg_Medals), y = Avg_Medals, fill = Context)) +
+                      geom_col(position = "dodge", width = 0.7) +
+                      coord_flip() +
+                      
+                      scale_fill_manual(values = c("Hosting" = "#d7191c", "Visiting" = "#2c7bb6")) +
+                      
+                      theme_minimal() +
+                      labs(
+                        title = "The Home Advantage: Hosting vs. Visiting Performance",
+                        subtitle = "Comparing average medal counts when hosting the Games vs. competing abroad",
+                        x = NULL,
+                        y = "Average medals per games",
+                        fill = "Context"
+                      ) +
+                      theme(
+                        legend.position = "top",
+                        axis.text.y = element_text(face = "bold")
+                      )
+
+img_hosting_adv_pl_2 <-  hosting_adv_pl_2 +                  
+  inset_element(p = logo,
+                left = 0.80, 
+                bottom = 0.02,
+                right = 1,
+                top = 0.2, 
+                align_to = "panel")
+img_hosting_adv_pl_2
+
+################################################################################
+################################################################################
 
