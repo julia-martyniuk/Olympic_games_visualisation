@@ -10,6 +10,11 @@ library(ggthemes)
 library(ggrepel) 
 # install.packages('gifski')
 # install.packages('gganimate')
+# install.packages('jpeg') 
+# install.packages("patchwork")  
+# install.packages("magick")
+#install.packages("ggalluvial")
+library(ggalluvial)
 library(gganimate)
 library(jpeg)
 library(patchwork)
@@ -547,102 +552,7 @@ img_country_path_pl <-  country_path_pl +
                 align_to = "plot")
 img_country_path_pl
 
-################################################################################
-################################################################################
-# Performance of the countries estimated in the number of medals by years 
-# Dynamic plot 
-ui <- fluidPage(
-  titlePanel("Olympic performance"),
-  sidebarLayout(
-    sidebarPanel(
-      h4("Settings"),
-      selectInput(inputId = "selected_country", 
-                  label = "Choose a country:", 
-                  choices = sort(unique(olympics$Country_Link)),
-                  selected = "GBR"), 
-      selectInput(inputId = "selected_season", 
-                  label = "Choose season:", 
-                  choices = c("Summer", "Winter"), 
-                  selected = "Summer"),
-      hr()
-    ),
-    
-    mainPanel(
-      plotOutput("coolPlot", height = "600px")
-    )
-  )
-)
-server <- function(input, output) {
-  output$coolPlot <- renderPlot({
-    target_country <- input$selected_country
-    target_season  <- input$selected_season
-    
-    # data for the plot
-    country_path <- olympics %>%
-      filter(Country_Link == target_country) %>% 
-      filter(Season == target_season) %>% 
-      group_by(Year, City, is_host) %>% 
-      summarise(
-        Total_Medals = sum(!is.na(Medal)),        
-        Team_Size = n_distinct(Athlete_name),     
-        .groups = "drop"
-      ) %>%
-      mutate(Label = City)
-    
-    #  prevent errors for countries with no medals
-    if(nrow(country_path) == 0) return(NULL)
-    
-    # plot
-    country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
-      geom_smooth(method = "loess", span = 0.5, color = "gray60",  fill = "gray80", alpha = 0.2) + 
-      geom_line(color = "gray80", size = 1) +
-      # Bubbles
-      geom_point(aes(size = Team_Size, fill = factor(is_host)), shape = 21, color = "white", stroke = 0.5) +
-      # Labels
-      geom_text_repel(aes(label = Label), 
-                      box.padding = 0.5, 
-                      point.padding = 0.5,
-                      size = 3, 
-                      color = "black",
-                      max.overlaps = 50) + 
-      scale_size_continuous(range = c(3, 12), name = "Team Size") +
-      scale_x_continuous(breaks = seq(1896, 2016, 8)) +
-      
-      scale_fill_manual(
-        name = "Status",
-        values = c("0" = "#2c7bb6", "1" = "#d7191c"), 
-        labels = c("0" = "Visitor", "1" = "Host")     
-      ) +
-      
-      guides(
-        fill = guide_legend(order = 1,, override.aes = list(size = 5) ), 
-        size = guide_legend(order = 2, override.aes = list(fill = "gray50")) 
-      ) +
-      
-      theme_minimal() +
-      theme(
-        legend.position = "top",
-        legend.box = "horizontal",      
-        legend.box.just = "center",     
-        legend.margin = margin(t = 5, b = 5), 
-        legend.spacing.x = unit(0.5, 'cm'), 
-        legend.title = element_text(size = 12, face = "bold"),
-        legend.text = element_text(size = 10),
-        plot.title = element_text(face = "bold", size = 16),
-        panel.grid.minor = element_blank(),
-        axis.title = element_text(color = "grey31")
-      ) +
 
-      labs(
-        title = paste("Performance:", target_country, "(",target_season,")"),
-        x = "Year",
-        y = "Total Medals Won"
-      )
-    country_path_pl + inset_element(p = logo, left = 0.85, bottom = 0.80, right = 1, top = 1, align_to = "plot")
-  })
-}
-# Run the app
-shinyApp(ui = ui, server = server)
 
 ################################################################################
 ################################################################################
@@ -753,4 +663,467 @@ img_hosting_adv_pl_2
 
 ################################################################################
 ################################################################################
+# Total medals per country and season
+medals_per_country <- olympics %>%
+  filter(!is.na(Medal)) %>%                # keep only medal-winning entries
+  group_by(Country_Link, Season) %>%
+  summarise(
+    Total_Medals = n(),
+    .groups = "drop"
+  )
 
+dist_medals_country_pl <- ggplot(
+  medals_per_country,
+  aes(x = Total_Medals)
+) +
+  # Histogram
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 30,
+    fill = "gray70",
+    color = "white",
+    alpha = 0.7
+  ) +
+  
+  # Density curve
+  geom_density(
+    color = "#d7191c",
+    linewidth = 1
+  ) +
+  
+  # Facet by season
+  facet_wrap(~ Season, scales = "free_x") +
+  
+  # Labels
+  labs(
+    title = "Distribution of total medals per country",
+    subtitle = "Histogram and density of medal counts by season",
+    x = "Total medals won by country",
+    y = "Density",
+    caption = "Source: Olympics dataset"
+  ) +
+  
+  # Theme
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    axis.title = element_text(color = "grey30"),
+    panel.grid.minor = element_blank()
+  )
+
+img_dist_medals_country_pl <- dist_medals_country_pl +
+  inset_element(
+    p = logo,
+    left = 0.02,
+    bottom = 0.80,
+    right = 0.18,
+    top = 0.98,
+    align_to = "panel"
+  )
+
+img_dist_medals_country_pl
+
+
+###################################
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(gganimate)
+
+
+# ---- Lorenz data builder ----
+lorenz_data <- function(df) {
+  df <- df %>%
+    filter(!is.na(Medal)) %>%
+    group_by(Country_Link) %>%
+    summarise(Medals = n(), .groups = "drop") %>%
+    arrange(Medals)
+  
+  if (nrow(df) == 0) return(NULL)
+  
+  df %>%
+    mutate(
+      Country_Share = row_number() / n(),
+      Medal_Share   = cumsum(Medals) / sum(Medals)
+    )
+}
+
+lorenz_by_season <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  group_by(Season, Country_Link) %>%
+  summarise(Medals = n(), .groups = "drop") %>%
+  arrange(Season, Medals) %>%
+  group_by(Season) %>%
+  mutate(
+    Country_Share = row_number() / n(),
+    Medal_Share   = cumsum(Medals) / sum(Medals),
+    Gini = gini_coef(Medals)
+  ) %>%
+  ungroup()
+
+lorenz_alltime_pl <- ggplot(lorenz_by_season, aes(x = Country_Share, y = Medal_Share, color = Season)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
+  geom_line(linewidth = 1.2) +
+  facet_wrap(~Season) +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Lorenz curve of medal distribution across countries",
+    subtitle = "More bowed curve = more concentration of medals in few countries",
+    x = "Cumulative share of countries",
+    y = "Cumulative share of medals",
+    caption = "Source: Olympics dataset"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+
+lorenz_alltime_pl
+
+target_season <- "Summer"   
+
+lorenz_yearly <- olympics %>%
+  filter(!is.na(Medal), Season == target_season) %>%
+  group_by(Year, Country_Link) %>%
+  summarise(Medals = n(), .groups = "drop") %>%
+  group_by(Year) %>%
+  arrange(Medals, .by_group = TRUE) %>%
+  mutate(
+    Country_Share = row_number() / n(),
+    Medal_Share   = cumsum(Medals) / sum(Medals)
+  ) %>%
+  ungroup()
+
+lorenz_anim_pl <- ggplot(lorenz_yearly, aes(Country_Share, Medal_Share, group = Year)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
+  geom_line(linewidth = 1.2, color = "#d7191c") +
+  scale_x_continuous(labels = percent_format()) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = paste0("Lorenz curve over time (", target_season, ") — Year: {frame_time}"),
+    subtitle = "Medal concentration across countries (more bowed = more unequal)",
+    x = "Cumulative share of countries",
+    y = "Cumulative share of medals"
+  ) +
+  theme_minimal() +
+  transition_time(Year)
+
+animate(lorenz_anim_pl, fps = 10, duration = 15, width = 800, height = 500, renderer = gifski_renderer())
+
+# ---- Lorenz animation for WINTER ----
+
+target_season <- "Winter"
+
+lorenz_yearly_winter <- olympics %>%
+  filter(!is.na(Medal), Season == target_season) %>%
+  group_by(Year, Country_Link) %>%
+  summarise(Medals = n(), .groups = "drop") %>%
+  group_by(Year) %>%
+  arrange(Medals, .by_group = TRUE) %>%
+  mutate(
+    Country_Share = row_number() / n(),
+    Medal_Share   = cumsum(Medals) / sum(Medals)
+  ) %>%
+  ungroup()
+
+lorenz_anim_winter_pl <- ggplot(lorenz_yearly_winter,
+                                aes(x = Country_Share, y = Medal_Share, group = Year)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray60") +
+  geom_line(linewidth = 1.2, color = "#2c7bb6") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Lorenz curve over time (Winter) — Year: {frame_time}",
+    subtitle = "Medal concentration across countries (more bowed = more unequal)",
+    x = "Cumulative share of countries",
+    y = "Cumulative share of medals"
+  ) +
+  theme_minimal() +
+  transition_time(Year)
+
+animate(lorenz_anim_winter_pl,
+        fps = 10, duration = 15, width = 800, height = 500,
+        renderer = gifski_renderer())
+
+
+########################################
+
+
+
+# Top 6 countries PER SEASON
+top_countries_by_season <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  count(Season, Country_Link, sort = TRUE) %>%
+  group_by(Season) %>%
+  slice_head(n = 6) %>%
+  ungroup()
+
+# Top 6 sports PER SEASON
+top_sports_by_season <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  count(Season, Sport, sort = TRUE) %>%
+  group_by(Season) %>%
+  slice_head(n = 6) %>%
+  ungroup()
+
+# Build alluvial data using season-specific top lists
+alluvial_data_season <- olympics %>%
+  filter(!is.na(Medal)) %>%
+  inner_join(top_countries_by_season, by = c("Season", "Country_Link")) %>%
+  inner_join(top_sports_by_season,   by = c("Season", "Sport")) %>%
+  count(Season, Country_Link, Sport, name = "Medals")
+
+#Plot (with nicer labels + free y scaling)
+alluvial_pl <- ggplot(alluvial_data_season,
+                      aes(axis1 = Country_Link, axis2 = Sport, y = Medals)) +
+  geom_alluvium(aes(fill = Sport), alpha = 0.5, width = 1/18) +
+  geom_stratum(width = 1/12, fill = "gray92", color = "gray50") +
+  geom_text(stat = "stratum",
+            aes(label = str_trunc(after_stat(stratum), 16)),
+            size = 3) +
+  facet_wrap(~Season, scales = "free_y") +
+  scale_x_discrete(limits = c("Country", "Sport"), expand = c(.05, .05)) +
+  labs(
+    title = "Where medals come from: country → sport flows",
+    subtitle = "Top 6 countries and top 6 sports (chosen within each season)",
+    y = "Number of medals",
+    caption = "Source: Olympics dataset"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none", panel.grid.minor = element_blank())
+
+alluvial_pl
+
+################################################################################
+################################################################################
+
+top_n <- 5
+target_season <- "Summer"
+
+top_countries <- olympics %>%
+  filter(!is.na(Medal), Season == target_season) %>%
+  count(Country_Link, sort = TRUE) %>%
+  slice_head(n = top_n) %>%
+  pull(Country_Link)
+
+ranked <- olympics %>%
+  filter(!is.na(Medal),
+         Season == target_season,
+         Country_Link %in% top_countries) %>%
+  count(Year, Country_Link, name = "Medals") %>%
+  group_by(Year) %>%
+  mutate(Rank = rank(-Medals, ties.method = "first")) %>%
+  ungroup()
+
+library(ggrepel)
+
+end_labels <- ranked %>%
+  group_by(Country_Link) %>%
+  filter(Year == max(Year)) %>%
+  ungroup()
+
+bump_pl <- ggplot(
+  ranked,
+  aes(Year, Rank, group = Country_Link, color = Country_Link)
+) +
+  geom_line(linewidth = 1.2, alpha = 0.9) +
+  geom_point(size = 2.4) +
+  scale_y_reverse(breaks = 1:top_n) +
+  scale_x_continuous(breaks = sort(unique(ranked$Year))) +
+  scale_color_viridis_d(option = "turbo", end = 0.95) +
+  geom_text_repel(
+    data = end_labels,
+    aes(label = Country_Link),
+    nudge_x = 2,
+    direction = "y",
+    hjust = 0,
+    size = 3.8,
+    show.legend = FALSE,
+    min.segment.length = 0
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = paste0("Bump chart: Top ", top_n, " countries by total medals (", target_season, ")"),
+    subtitle = "Lower rank is better (Rank 1 at the top)",
+    x = "Year",
+    y = "Rank",
+    caption = "Source: Olympics dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 7),
+    plot.margin = margin(10, 60, 10, 10)
+  )
+
+print(bump_pl)
+
+
+# ---- Settings ----
+target_season <- "Winter"
+top_n <- 5
+
+# ---- Top 5 countries overall in Winter ----
+top_countries <- olympics %>%
+  filter(!is.na(Medal), Season == target_season) %>%
+  count(Country_Link, sort = TRUE) %>%
+  slice_head(n = top_n) %>%
+  pull(Country_Link)
+
+# ---- Medals per year for those countries + ranking per year ----
+ranked_winter <- olympics %>%
+  filter(!is.na(Medal),
+         Season == target_season,
+         Country_Link %in% top_countries) %>%
+  count(Year, Country_Link, name = "Medals") %>%
+  group_by(Year) %>%
+  mutate(Rank = rank(-Medals, ties.method = "first")) %>%
+  ungroup()
+
+# ---- End labels (last year each country appears) ----
+end_labels_winter <- ranked_winter %>%
+  group_by(Country_Link) %>%
+  filter(Year == max(Year)) %>%
+  ungroup()
+
+# ---- Plot ----
+bump_pl_winter <- ggplot(
+  ranked_winter,
+  aes(Year, Rank, group = Country_Link, color = Country_Link)
+) +
+  geom_line(linewidth = 1.2, alpha = 0.9) +
+  geom_point(size = 2.4) +
+  scale_y_reverse(breaks = 1:top_n) +
+  scale_x_continuous(breaks = sort(unique(ranked_winter$Year))) +
+  scale_color_viridis_d(option = "turbo", end = 0.95) +
+  geom_text_repel(
+    data = end_labels_winter,
+    aes(label = Country_Link),
+    nudge_x = 2,
+    direction = "y",
+    hjust = 0,
+    size = 3.8,
+    show.legend = FALSE,
+    min.segment.length = 0
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = paste0("Bump chart: Top ", top_n, " countries by total medals (Winter)"),
+    subtitle = "Lower rank is better (Rank 1 at the top)",
+    x = "Year",
+    y = "Rank",
+    caption = "Source: Olympics dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 7),
+    plot.margin = margin(10, 60, 10, 10)
+  )
+
+print(bump_pl_winter)
+
+
+################################################################################
+################################################################################
+
+
+
+################################################################################
+################################################################################
+# Performance of the countries estimated in the number of medals by years 
+# Dynamic plot 
+ui <- fluidPage(
+  titlePanel("Olympic performance"),
+  sidebarLayout(
+    sidebarPanel(
+      h4("Settings"),
+      selectInput(inputId = "selected_country", 
+                  label = "Choose a country:", 
+                  choices = sort(unique(olympics$Country_Link)),
+                  selected = "GBR"), 
+      selectInput(inputId = "selected_season", 
+                  label = "Choose season:", 
+                  choices = c("Summer", "Winter"), 
+                  selected = "Summer"),
+      hr()
+    ),
+    
+    mainPanel(
+      plotOutput("coolPlot", height = "600px")
+    )
+  )
+)
+server <- function(input, output) {
+  output$coolPlot <- renderPlot({
+    target_country <- input$selected_country
+    target_season  <- input$selected_season
+    
+    # data for the plot
+    country_path <- olympics %>%
+      filter(Country_Link == target_country) %>% 
+      filter(Season == target_season) %>% 
+      group_by(Year, City, is_host) %>% 
+      summarise(
+        Total_Medals = sum(!is.na(Medal)),        
+        Team_Size = n_distinct(Athlete_name),     
+        .groups = "drop"
+      ) %>%
+      mutate(Label = City)
+    
+    #  prevent errors for countries with no medals
+    if(nrow(country_path) == 0) return(NULL)
+    
+    # plot
+    country_path_pl <- ggplot(country_path, aes(x = Year, y = Total_Medals)) +
+      geom_smooth(method = "loess", span = 0.5, color = "gray60",  fill = "gray80", alpha = 0.2) + 
+      geom_line(color = "gray80", size = 1) +
+      # Bubbles
+      geom_point(aes(size = Team_Size, fill = factor(is_host)), shape = 21, color = "white", stroke = 0.5) +
+      # Labels
+      geom_text_repel(aes(label = Label), 
+                      box.padding = 0.5, 
+                      point.padding = 0.5,
+                      size = 3, 
+                      color = "black",
+                      max.overlaps = 50) + 
+      scale_size_continuous(range = c(3, 12), name = "Team Size") +
+      scale_x_continuous(breaks = seq(1896, 2016, 8)) +
+      
+      scale_fill_manual(
+        name = "Status",
+        values = c("0" = "#2c7bb6", "1" = "#d7191c"), 
+        labels = c("0" = "Visitor", "1" = "Host")     
+      ) +
+      
+      guides(
+        fill = guide_legend(order = 1,, override.aes = list(size = 5) ), 
+        size = guide_legend(order = 2, override.aes = list(fill = "gray50")) 
+      ) +
+      
+      theme_minimal() +
+      theme(
+        legend.position = "top",
+        legend.box = "horizontal",      
+        legend.box.just = "center",     
+        legend.margin = margin(t = 5, b = 5), 
+        legend.spacing.x = unit(0.5, 'cm'), 
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        plot.title = element_text(face = "bold", size = 16),
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(color = "grey31")
+      ) +
+      
+      labs(
+        title = paste("Performance:", target_country, "(",target_season,")"),
+        x = "Year",
+        y = "Total Medals Won"
+      )
+    country_path_pl + inset_element(p = logo, left = 0.85, bottom = 0.80, right = 1, top = 1, align_to = "plot")
+  })
+}
+# Run the app
+shinyApp(ui = ui, server = server)
