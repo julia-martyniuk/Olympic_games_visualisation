@@ -799,52 +799,52 @@ heatmap_data <- olympics_categorized %>%
   summarise(Medals = n(), .groups = "drop")
 
 
-ggplot(heatmap_data, aes(x = Discipline, y = Country_Link, fill = Medals)) +
-  geom_tile(color = "white", size = 0.2) +
-  # Faceting
-  facet_grid(~Category, scales = "free_x", space = "free_x") +
-  # Scales
-  scale_fill_viridis_c(option = "magma", direction = -1, name = "Medals") +
-  # Guides (Legend Size)
-  guides(fill = guide_colorbar(
-    barwidth = unit(4, "cm"), 
-    barheight = unit(0.3, "cm"),
-    title.position = "top", 
-    title.hjust = 0.5
-  )) +
-  
-  # Formatting
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = 9,face = "bold"), 
-    axis.text.y = element_text(face = "bold"),
-    
-    # Facet Headers
-    strip.background = element_rect(fill = "gray90", color = NA),
-    strip.text = element_text(face = "bold", size = 10),
-    plot.title = element_text(size = 18, face = "bold"),
-    plot.subtitle = element_text(size = 12),
-    
-    # Floating Legend Positioning
-    legend.position = c(1, 1.12), 
-    legend.justification = "right",
-    legend.direction = "horizontal",
-    legend.title = element_text(size = 9, face = "bold"),
-    legend.text = element_text(size = 8),
-    
-    # to fit the legend and title
-    plot.margin = margin(t = 60, r = 10, b = 10, l = 10) 
-  ) +
-  
-  labs(
-    title = "National Dominance by Sport Categories",
-    subtitle = "Which nations specialize more?",
-    x = NULL,
-    y = NULL
-  )
+sport_cat_pl <- ggplot(heatmap_data, aes(x = Discipline, y = Country_Link, fill = Medals)) +
+            geom_tile(color = "white", size = 0.2) +
+            # Faceting
+            facet_grid(~Category, scales = "free_x", space = "free_x") +
+            # Scales
+            scale_fill_viridis_c(option = "magma", direction = -1, name = "Medals") +
+            # Guides (Legend Size)
+            guides(fill = guide_colorbar(
+              barwidth = unit(4, "cm"), 
+              barheight = unit(0.3, "cm"),
+              title.position = "top", 
+              title.hjust = 0.5
+            )) +
+            
+            # Formatting
+            theme_minimal() +
+            theme(
+              panel.grid = element_blank(),
+              axis.text.x = element_text(angle = 40, hjust = 1, vjust = 1, size = 9,face = "bold"), 
+              axis.text.y = element_text(face = "bold"),
+              
+              # Facet Headers
+              strip.background = element_rect(fill = "gray90", color = NA),
+              strip.text = element_text(face = "bold", size = 10),
+              plot.title = element_text(size = 18, face = "bold"),
+              plot.subtitle = element_text(size = 12),
+              
+              # Floating Legend Positioning
+              legend.position = c(1, 1.12), 
+              legend.justification = "right",
+              legend.direction = "horizontal",
+              legend.title = element_text(size = 9, face = "bold"),
+              legend.text = element_text(size = 8),
+              
+              # to fit the legend and title
+              plot.margin = margin(t = 60, r = 10, b = 10, l = 10) 
+            ) +
+            
+            labs(
+              title = "National Dominance by Sport Categories",
+              subtitle = "Which nations specialize more?",
+              x = NULL,
+              y = NULL
+            )
 
-
+sport_cat_pl
 
 ################################################################################
 ################################################################################
