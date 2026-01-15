@@ -310,7 +310,7 @@ anim_share_w_in_team <- share_w_in_team_pl +
   ease_aes('linear')   # Smooths the transition between years
 
 # Render the animation
-animate(anim_share_w_in_team, fps = 10, duration = 20, width = 800, height = 500, renderer = gifski_renderer())
+animate(anim_share_w_in_team, fps = 10, duration = 45, width = 800, height = 500, renderer = gifski_renderer())
 
 ################################################################################
 ################################################################################
@@ -421,7 +421,7 @@ anim_racing_cntr_pl <- racing_cntr_pl +
   transition_time(Year) + 
   view_follow(fixed_y = TRUE) + # X-axis moves, Y-axis (Rank 1-10) stays
   labs(title = 'All-time medal leaders in {frame_time}')
-animate(anim_racing_cntr_pl, fps = 20, duration = 25, width = 800, height = 600, renderer = gifski_renderer())
+animate(anim_racing_cntr_pl, fps = 20, duration = 45, width = 800, height = 600, renderer = gifski_renderer())
 
 ################################################################################
 ################################################################################
