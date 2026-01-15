@@ -859,49 +859,49 @@ tarzan_data <- olympics %>%
     Event_Label = gsub("Water Polo Men's ", "", Event_Label)
   )
 
-ggplot(tarzan_data, aes(x = Year, y = Event_Label)) +
+tarzan_pl <- ggplot(tarzan_data, aes(x = Year, y = Event_Label)) +
+        
+          geom_segment(aes(x = 1922, xend = 1930, y = Event_Label, yend = Event_Label), 
+                       color = "#a6cee3", size = 6, alpha = 0.5) + 
+          # Medals
+          geom_point(aes(fill = Medal), shape = 21, color = "white", size = 8, stroke = 1) +
+          geom_text(aes(label = substr(Medal, 1, 1)), color = "white", fontface = "bold", size = 3) +
+          # Tarzan Annotation
+          annotate("curve", x = 1929, y = 3, xend = 1932, yend = 3, 
+                   curvature = -0.2, arrow = arrow(length = unit(0.3, "cm")), 
+                   color = "#006400", size = 1) + 
+          
+          annotate("text", x = 1932.2, y = 3, 
+                   label = "1932: Becomes Tarzan\n(First of 12 movies)", 
+                   hjust = 0, color = "#006400", fontface = "bold", size = 4) +
+          # Scales
+          scale_fill_manual(values = c("Gold" = "#FFD700", "Bronze" = "#cd7f32")) +
+          scale_x_continuous(limits = c(1922, 1938), breaks = c(1924, 1928)) +
+          
+          theme_minimal() +
+          theme(
+            legend.position = "none",
+            panel.grid = element_blank(),
+            plot.background = element_rect(fill = "#f0fff0", color = NA),  
+            panel.background = element_rect(fill = "#f0fff0", color = NA), 
+            
+            plot.title.position = "plot",
+            plot.caption.position = "plot",
+            plot.title = element_text(face = "bold", size = 18, hjust = 0, color = "#004d00"), 
+            plot.subtitle = element_text(size = 12, color = "#2e8b57", hjust = 0), 
+            
+            axis.text.y = element_text(face = "bold", size = 11, color = "#0047AB"), 
+            axis.text.x = element_text(face = "bold", size = 11, color = "#006400")
+          ) +
+          
+          labs(
+            title = "Johnny Weissmuller: From the Pool to the Jungle",
+            subtitle = "Sport before his Hollywood career",
+            x = NULL,
+            y = NULL
+          )
 
-  geom_segment(aes(x = 1922, xend = 1930, y = Event_Label, yend = Event_Label), 
-               color = "#a6cee3", size = 6, alpha = 0.5) + 
-  # Medals
-  geom_point(aes(fill = Medal), shape = 21, color = "white", size = 8, stroke = 1) +
-  geom_text(aes(label = substr(Medal, 1, 1)), color = "white", fontface = "bold", size = 3) +
-  # Tarzan Annotation
-  annotate("curve", x = 1929, y = 3, xend = 1932, yend = 3, 
-           curvature = -0.2, arrow = arrow(length = unit(0.3, "cm")), 
-           color = "#006400", size = 1) + 
-  
-  annotate("text", x = 1932.2, y = 3, 
-           label = "1932: Becomes Tarzan\n(First of 12 movies)", 
-           hjust = 0, color = "#006400", fontface = "bold", size = 4) +
-  # Scales
-  scale_fill_manual(values = c("Gold" = "#FFD700", "Bronze" = "#cd7f32")) +
-  scale_x_continuous(limits = c(1922, 1938), breaks = c(1924, 1928)) +
-  
-  theme_minimal() +
-  theme(
-    legend.position = "none",
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "#f0fff0", color = NA),  
-    panel.background = element_rect(fill = "#f0fff0", color = NA), 
-    
-    plot.title.position = "plot",
-    plot.caption.position = "plot",
-    plot.title = element_text(face = "bold", size = 18, hjust = 0, color = "#004d00"), 
-    plot.subtitle = element_text(size = 12, color = "#2e8b57", hjust = 0), 
-    
-    axis.text.y = element_text(face = "bold", size = 11, color = "#0047AB"), 
-    axis.text.x = element_text(face = "bold", size = 11, color = "#006400")
-  ) +
-  
-  labs(
-    title = "Johnny Weissmuller: From the Pool to the Jungle",
-    subtitle = "Sport before his Hollywood career",
-    x = NULL,
-    y = NULL
-  )
-
-
+tarzan_pl
 
 ################################################################################
 ################################################################################
