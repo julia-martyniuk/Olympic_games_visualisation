@@ -16,6 +16,7 @@ library(patchwork)
 library(magick)
 library(shiny)
 library(forcats)
+library(maps)
 ################################################################################
 ################################################################################
 ######## Data preprocessing ########
@@ -899,3 +900,133 @@ ggplot(tarzan_data, aes(x = Year, y = Event_Label)) +
     x = NULL,
     y = NULL
   )
+
+
+
+################################################################################
+################################################################################
+# Map, footprint of the Olympic games
+host_cities_list <- olympics %>%
+  filter(is_host == 1) %>%
+  distinct(City, Year, Season) %>%
+  arrange(City)
+
+rio_row <- data.frame(City = "Rio de Janeiro", Year = 2016, Season = "Summer")
+host_cities_list <- rbind(host_cities_list, rio_row)
+
+# Add countries names (to match them on the map)
+city_country_map <- data.frame(
+  City = c("Albertville", "Amsterdam", "Antwerp", "Athens", "Atlanta", "Barcelona", 
+           "Beijing", "Berlin", "Calgary", "Chamonix", "Cortina d'Ampezzo", 
+           "Garmisch Partenkirchen", "Grenoble", "Helsinki", "Innsbruck", 
+           "Lake Placid", "Lillehammer", "London", "Los Angeles", 
+           "Melbourne / Stockholm", "Mexico", "Montreal", "Moscow", "Munich", 
+           "Nagano", "Oslo", "Paris", "Rome", "Salt Lake City", "Sapporo", 
+           "Sarajevo", "Seoul", "Sochi", "Squaw Valley", "St Louis", "St.Moritz", 
+           "Stockholm", "Sydney", "Tokyo", "Turin", "Vancouver", "Rio de Janeiro"),
+  # These must match map_data("world") region names exactly
+  Region = c("France", "Netherlands", "Belgium", "Greece", "USA", "Spain", 
+             "China", "Germany", "Canada", "France", "Italy", 
+             "Germany", "France", "Finland", "Austria", 
+             "USA", "Norway", "UK", "USA", 
+             "Australia", "Mexico", "Canada", "Russia", "Germany", 
+             "Japan", "Norway", "France", "Italy", "USA", "Japan", 
+             "Bosnia and Herzegovina", "South Korea", "Russia", "USA", "USA", "Switzerland", 
+             "Sweden", "Australia", "Japan", "Italy", "Canada", "Brazil")
+)
+
+host_cities_list <- left_join(host_cities_list, city_country_map, by = "City")
+
+
+# Add coordinates
+city_coords <- data.frame(
+  City_Name = c("Albertville", "Amsterdam", "Antwerp", "Athens", "Atlanta", "Barcelona", 
+                "Beijing", "Berlin", "Calgary", "Chamonix", "Cortina d'Ampezzo", 
+                "Garmisch Partenkirchen", "Grenoble", "Helsinki", "Innsbruck", 
+                "Lake Placid", "Lillehammer", "London", "Los Angeles", 
+                "Melbourne / Stockholm", "Mexico", "Montreal", "Moscow", "Munich", 
+                "Nagano", "Oslo", "Paris", "Rome", "Salt Lake City", "Sapporo", 
+                "Sarajevo", "Seoul", "Sochi", "Squaw Valley", "St Louis", "St.Moritz", 
+                "Stockholm", "Sydney", "Tokyo", "Turin", "Vancouver",
+                "Rio de Janeiro"),
+  Lat = c(45.67, 52.36, 51.21, 37.98, 33.74, 41.38, 39.90, 52.52, 51.04, 45.92, 
+          46.54, 47.49, 45.18, 60.16, 47.26, 44.27, 61.11, 51.50, 34.05, -37.81, 
+          19.43, 45.50, 55.75, 48.13, 36.64, 59.91, 48.85, 41.90, 40.76, 43.06, 
+          43.85, 37.56, 43.60, 39.19, 38.62, 46.49, 59.32, -33.86, 35.67, 45.07, 49.28,
+          -22.90),
+  Long = c(6.39, 4.90, 4.40, 23.72, -84.38, 2.17, 116.40, 13.40, -114.07, 6.86, 
+           12.13, 11.07, 5.72, 24.93, 11.40, -73.97, 10.46, -0.12, -118.24, 144.96, 
+           -99.13, -73.56, 37.61, 11.58, 138.18, 10.75, 2.35, 12.49, -111.89, 141.35, 
+           18.41, 126.97, 39.73, -120.24, -90.19, 9.83, 18.06, 151.20, 139.65, 7.68, -123.12,
+           -43.17)
+)
+
+plot_data <- host_cities_list %>%
+  group_by(City, Season) %>%
+  summarise(Host_Count = n(), Region = first(Region), .groups = "drop") %>%
+  left_join(city_coords, by = c("City" = "City_Name")) %>%
+  mutate(Label_Text = ifelse(City == "Rio de Janeiro", "Rio 2016", City))
+
+# map layers
+world_map <- map_data("world")
+
+# filter the world map to get ONLY the host countries
+host_countries_map <- world_map %>%
+  filter(region %in% plot_data$Region)
+
+map_pl <- ggplot() +
+                  # base World map layer
+                  geom_polygon(data = world_map, aes(x = long, y = lat, group = group),
+                             fill = "#f0f0f0", color = "white", size = 0.2) +
+                
+                  # second layer highlighted green host countries territories 
+                  geom_polygon(data = host_countries_map, aes(x = long, y = lat, group = group),
+                               fill = "#c7e9c0", color = "white", size = 0.2) + # "Pale Green"
+                  
+                  # bubbles for number of times city hosted
+                  geom_point(data = plot_data, 
+                             aes(x = Long, y = Lat, size = Host_Count, fill = Season), 
+                             shape = 21, color = "black", stroke = 0.5, alpha = 0.9) +
+                  
+                  # labels
+                  geom_text_repel(data = plot_data, aes(x = Long, y = Lat, label = Label_Text),
+                                  size = 3, fontface = "bold", 
+                                  box.padding = 0.4, point.padding = 0.3,
+                                  max.overlaps = 15, seed = 42) +
+                  
+                  # Scales andlegends
+                  scale_fill_manual(values = c("Summer" = "#d7191c", "Winter" = "#2c7bb6")) +
+                  scale_size_continuous(range = c(4, 10), breaks = c(1, 2, 3), name = "Times Hosted") +
+                  
+                  guides(
+                    fill = guide_legend(override.aes = list(size = 8), order = 1), 
+                    size = guide_legend(override.aes = list(fill = "gray60"), order = 2)
+                  ) +
+                  
+                  theme_void() +
+                  theme(
+                    legend.position = "bottom",
+                    legend.box = "horizontal",
+                    legend.box.just = "center",
+                    legend.margin = margin(t = 10),
+                    legend.title = element_text(face = "bold", size = 10),
+                    legend.text = element_text(size = 9),
+                    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
+                    plot.subtitle = element_text(hjust = 0.5, color = "grey50", size = 12),
+                    plot.background = element_rect(fill = "white", color = NA)
+                  ) +
+                  
+                  labs(
+                    title = "Global Footprint of the Olympics",
+                    fill = "Season"
+                  )
+
+img_map_pl <- map_pl +                  
+  inset_element(p = logo,
+                left = 0.88,   
+                bottom = 0.02, 
+                right = 1,    
+                top = 0.10,    
+                align_to = "plot")
+
+img_map_pl
