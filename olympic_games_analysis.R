@@ -157,6 +157,8 @@ growth_n_events <- olympics %>%
                values_to = "Count")
 
 
+#############################################################
+# Olympic Disciplines by Gender 
 n_events_growth_pl <-  
   ggplot(growth_n_events, aes(x = Year, y = Count, color = Season, linetype = Metric)) +
   # WWI (1914-1918)
@@ -172,7 +174,7 @@ n_events_growth_pl <-
         scale_color_manual(values = c("Summer" = "#d7191c", "Winter" = "#2c7bb6")) +
         scale_linetype_manual(values = c("Events" = "solid", "Countries" = "dashed")) +
        # Scales
-        scale_x_continuous(breaks = seq(1896, 2016, by = 8)) +    
+        scale_x_continuous(breaks = seq(1896, 2014, by = 6)) +    
        # Labels
         labs(
         title = "Evolution of the Olympic games",
@@ -200,16 +202,14 @@ logo <- readJPEG(img_path, native = TRUE)
 img_n_events_growth_pl <- n_events_growth_pl +                  
   inset_element(p = logo,
                 left = 0.02,
-                bottom = 0.80,
-                right = 0.20,
+                bottom = 0.88,
+                right = 0.12,
                 top = 0.98, 
                 align_to = "panel")
 img_n_events_growth_pl
 
 ################################################################################
-################################################################################
-# Olympic Disciplines by Gender 
-
+###################
 global_gender_trends <- olympics %>%
   group_by(Year, Season) %>%
   summarise(
